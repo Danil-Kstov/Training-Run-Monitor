@@ -1,9 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import RunDetails from "./RunDetails";
 import RunSidebar from "./RunSidebar";
 import type { WorkerResponse } from "./types";
 import type { StepRange } from "../../lib/runView";
 import type { Metric } from "../../types/types";
+import type { ViewMode } from "../../lib/chartPayload";
+import { isCurrentWorkerResponse } from "../../lib/currentWorkerResponse";
 import "./Main.css";
 
 const runIdFromPath = () => window.location.pathname.match(/^\/runs\/(Run-\d+)\/?$/)?.[1] ?? "Run-01";
@@ -20,12 +22,14 @@ const Main = () => {
     const requestSequence = useRef(1);
     const pendingRangeRequestRef = useRef<number | null>(null);
     const workerRef = useRef<Worker | null>(null);
+    const modeRef = useRef<ViewMode>("overview");
+    const viewRef = useRef<WorkerResponse | null>(null);
     const contentRef = useRef<HTMLElement>(null);
 
     const currentView = view?.runId === selectedRunId ? view : null;
 
     const rememberHeight = () => {
-        if (currentView?.data && contentRef.current) {
+        if ((currentView?.data || currentView?.rawData) && contentRef.current) {
             setReservedHeight(contentRef.current.getBoundingClientRect().height);
         }
     };
@@ -38,8 +42,10 @@ const Main = () => {
         setPendingRangeRequestId(null);
         setRangeError("");
         setView(null);
+        viewRef.current = null;
         setSelectedRunId(runId);
         setScrollTarget(null);
+        modeRef.current = "overview";
         if (push) window.history.pushState(null, "", `/runs/${runId}`);
     };
 
@@ -62,14 +68,22 @@ const Main = () => {
 
         worker.onmessage = (event: MessageEvent<WorkerResponse>) => {
             const response = event.data;
-            if (response.requestId !== requestSequence.current) return;
+            if (!isCurrentWorkerResponse(response, requestSequence.current, selectedRunId)) return;
 
             if (pendingRangeRequestRef.current === response.requestId) {
                 pendingRangeRequestRef.current = null;
                 setPendingRangeRequestId(null);
-                if (response.error) setRangeError(response.error);
-                else setView(response);
+                if (response.error) {
+                    setRangeError(response.error);
+                    modeRef.current = viewRef.current?.mode ?? "overview";
+                } else {
+                    modeRef.current = response.mode ?? "overview";
+                    viewRef.current = response;
+                    setView(response);
+                }
             } else {
+                modeRef.current = response.mode ?? "overview";
+                viewRef.current = response;
                 setView(response);
             }
             setReservedHeight(null);
@@ -80,6 +94,7 @@ const Main = () => {
                 pendingRangeRequestRef.current = null;
                 setPendingRangeRequestId(null);
                 setRangeError("Worker failed");
+                modeRef.current = viewRef.current?.mode ?? "overview";
             } else {
                 setView({
                     requestId: requestSequence.current,
@@ -89,7 +104,11 @@ const Main = () => {
             }
         };
 
-        worker.postMessage({ requestId: requestSequence.current, runId: selectedRunId });
+        worker.postMessage({
+            requestId: requestSequence.current,
+            runId: selectedRunId,
+            mode: "overview",
+        });
 
         return () => {
             worker.terminate();
@@ -97,8 +116,9 @@ const Main = () => {
         };
     }, [selectedRunId]);
 
-    const requestRange = (range?: StepRange, scrollMetric?: Metric) => {
+    const requestRange = useCallback((range?: StepRange, scrollMetric?: Metric, mode?: ViewMode) => {
         if (!workerRef.current) return;
+        if (mode) modeRef.current = mode;
         requestSequence.current++;
         pendingRangeRequestRef.current = requestSequence.current;
         setPendingRangeRequestId(requestSequence.current);
@@ -110,8 +130,9 @@ const Main = () => {
             requestId: requestSequence.current,
             runId: selectedRunId,
             range,
+            mode: modeRef.current,
         });
-    };
+    }, [selectedRunId]);
 
     return (
         <main className="main">

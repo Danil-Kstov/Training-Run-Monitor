@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { memo, useState } from "react";
 import { CartesianGrid, Line, LineChart, ReferenceArea, ReferenceDot, Tooltip, XAxis, YAxis } from "recharts";
 import type { ChartPoint, Metric } from "../../types/types";
 import type { DataIssue } from "../../lib/prepareTrainingPoints";
@@ -6,12 +6,26 @@ import type { StepRange } from "../../lib/runView";
 import { formatNumber } from "../../lib/formatNumber";
 import { createYAxis } from "../../lib/chartAxis";
 import { getInvalidMarkers } from "../../lib/chartMarkers";
+import type { RawChartData } from "../../lib/chartPayload";
+import CanvasPlot from "./CanvasPlot";
+import type { DataWarning } from "../../lib/detectLossWarnings";
+import { overviewWarningMarkers } from "../../lib/overviewWarningMarkers";
+import {
+    chartHeight,
+    chartMargin,
+    chartXAxisHeight,
+    chartXAxisPadding,
+    chartYAxisWidth,
+} from "../../lib/chartLayout";
 
 type MetricChartProps = {
     metric: Metric;
-    data: ChartPoint[];
+    data?: ChartPoint[];
+    rawData?: RawChartData;
+    sampled?: boolean;
     range: StepRange;
     issues: DataIssue[];
+    warnings: DataWarning[];
     onZoom: (range: StepRange) => void;
 };
 
@@ -21,7 +35,16 @@ const colors: Record<Metric, string> = {
     grad_norm: "#6EE7B7",
 };
 
-const MetricChart = ({ metric, data, range, issues, onZoom }: MetricChartProps) => {
+const MetricChart = ({
+    metric,
+    data,
+    rawData,
+    sampled,
+    range,
+    issues,
+    warnings,
+    onZoom,
+}: MetricChartProps) => {
     const [dragStart, setDragStart] = useState<number | null>(null);
     const [dragEnd, setDragEnd] = useState<number | null>(null);
     const duplicateMarkers = issues.flatMap((issue) => {
@@ -33,7 +56,7 @@ const MetricChart = ({ metric, data, range, issues, onZoom }: MetricChartProps) 
             .filter(({ value }) => Number.isFinite(value));
     });
     const finiteValues = [
-        ...data.map((point) => point[metric]),
+        ...(data ?? []).map((point) => point[metric]),
         ...duplicateMarkers.map((marker) => marker.value),
     ].filter((value): value is number => value !== null && Number.isFinite(value));
     const yAxis = createYAxis(finiteValues);
@@ -44,6 +67,9 @@ const MetricChart = ({ metric, data, range, issues, onZoom }: MetricChartProps) 
         yAxis.domain,
         finiteValues.length > 0
     );
+    const warningMarkers = sampled && metric === "loss"
+        ? overviewWarningMarkers(warnings, range, yAxis.domain)
+        : [];
 
     const finishDrag = () => {
         if (dragStart !== null && dragEnd !== null && dragStart !== dragEnd) {
@@ -65,22 +91,39 @@ const MetricChart = ({ metric, data, range, issues, onZoom }: MetricChartProps) 
         >
             <h2 className="main__chart-title">{metric}</h2>
 
-            {invalidMarkers.length > 0 && (
-                <p className="main__chart-note">
-                    Red dots mark NaN or Infinity at the correct step. Their vertical position is symbolic.
-                </p>
-            )}
+            <p className="main__chart-note">
+                {invalidMarkers.length > 0 && (
+                    <span>Red: NaN or Infinity at the true step; Y is symbolic.</span>
+                )}
+            </p>
 
-            {finiteValues.length === 0 && (
+            <div className="main__chart-warning-note">
+                {warningMarkers.length > 0 && (
+                    <span>Orange: Warning at the true step; Y is symbolic outside the scale. Exact values below.</span>
+                )}
+            </div>
+
+            {!rawData && finiteValues.length === 0 && (
                 <p role="status">No finite {metric} values in this range.</p>
             )}
 
-            {(finiteValues.length > 0 || invalidMarkers.length > 0) && (
+            {rawData && (
+                <CanvasPlot
+                    metric={metric}
+                    raw={rawData}
+                    range={range}
+                    issues={issues}
+                    color={colors[metric]}
+                    onZoom={onZoom}
+                />
+            )}
+
+            {!rawData && (finiteValues.length > 0 || invalidMarkers.length > 0) && (
                 <LineChart
-                    style={{ width: "100%", minHeight: 260, aspectRatio: 1.618, maxHeight: 400 }}
-                    margin={{ top: 8, right: 20, bottom: 16, left: 20 }}
+                    style={{ width: "100%", height: chartHeight }}
+                    margin={chartMargin}
                     responsive
-                    data={data}
+                    data={data ?? []}
                     accessibilityLayer
                     onMouseDown={(state) => {
                         if (typeof state.activeLabel === "number") {
@@ -103,20 +146,22 @@ const MetricChart = ({ metric, data, range, issues, onZoom }: MetricChartProps) 
                         dataKey="step"
                         type="number"
                         domain={[range.start, range.end]}
-                        padding={{ left: 12, right: 12 }}
+                        padding={{ left: chartXAxisPadding, right: chartXAxisPadding }}
+                        tick={{ fontSize: 14, fontFamily: "system-ui" }}
                         tickFormatter={formatNumber}
                         tickMargin={12}
                         minTickGap={24}
-                        label={{ value: "Step", position: "insideBottom", offset: -5 }}
-                        height={60}
+                        label={{ value: "Step", position: "insideBottom", offset: -5, fontSize: 16 }}
+                        height={chartXAxisHeight}
                     />
                     <YAxis
                         hide={finiteValues.length === 0}
-                        width={104}
+                        width={chartYAxisWidth}
+                        tick={{ fontSize: 14, fontFamily: "system-ui" }}
                         tickMargin={14}
                         tickFormatter={yAxis.formatTick}
                         ticks={yAxis.ticks}
-                        label={{ value: metric, angle: -90, position: "insideLeft" }}
+                        label={{ value: metric, angle: -90, position: "insideLeft", fontSize: 16 }}
                         domain={yAxis.domain}
                     />
                     <Tooltip
@@ -158,6 +203,22 @@ const MetricChart = ({ metric, data, range, issues, onZoom }: MetricChartProps) 
                             }}
                         />
                     ))}
+                    {warningMarkers.map((warning) => (
+                        <ReferenceDot
+                            key={`warning-${warning.step}`}
+                            x={warning.step}
+                            y={warning.y}
+                            r={5}
+                            fill="#fb923c"
+                            stroke="#fff7ed"
+                            ifOverflow="visible"
+                            label={{
+                                value: formatNumber(warning.value),
+                                position: "right",
+                                fill: "#fed7aa",
+                            }}
+                        />
+                    ))}
                     {dragStart !== null && dragEnd !== null && (
                         <ReferenceArea
                             x1={dragStart}
@@ -172,4 +233,4 @@ const MetricChart = ({ metric, data, range, issues, onZoom }: MetricChartProps) 
     );
 };
 
-export default MetricChart;
+export default memo(MetricChart);

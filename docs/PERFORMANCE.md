@@ -1,6 +1,6 @@
 # Performance trace capture
 
-The required Chrome Performance trace and tab-memory reading have **not** been captured. Do not replace them with Node timings or estimated numbers.
+The required Chrome Performance trace and tab-memory reading have **not** been captured. Do not replace them with Node timings or estimated numbers. The measurements below predate the new Overview / All points modes and are retained as historical evidence, not measurements of the current code.
 
 ## Local sampling proxy, 2026-11-11
 
@@ -27,4 +27,4 @@ The local proxy got slower while retaining all six warning points. Browser measu
 | Hover response, CPU ×4 | Not captured | Not captured |
 | Tab memory, Run-08 | Not captured | Not captured |
 
-The local browser automation available to this session could not access the Vite server, and access to the already open Firefox window was denied. No trace file or screenshot is claimed.
+The local browser automation available to this session could not access the Vite server. A later attempt to inspect the already open Firefox Developer Edition window was stopped because browser URL policy enforcement is unsupported for that Windows browser. No trace file or screenshot is claimed. Before submission, capture separate first-render, Zoom, hover, and tab-memory measurements for Overview and All points on Run-20, including the first switch to All points.

@@ -189,9 +189,38 @@
     color: #fca5a5;
 }
 
+.main__view-mode {
+    margin-bottom: 12px;
+    min-height: 40px;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    color: #cbd5e1;
+}
+
+.main__view-mode button {
+    padding: 7px 12px;
+    border: 1px solid #94a3b8;
+    border-radius: 6px;
+    background: #334155;
+    color: #f8fafc;
+    cursor: pointer;
+}
+
+.main__view-mode button[aria-pressed="true"] {
+    border-color: #86efac;
+    background: #14532d;
+}
+
 .main__charts {
     display: grid;
     gap: 28px;
+}
+
+.main__point-count {
+    margin-top: 16px;
+    color: #cbd5e1;
 }
 
 .main__chart {
@@ -207,18 +236,76 @@
     font-weight: 700;
 }
 
-.main__chart-note {
-    margin-bottom: 8px;
-    color: #fecaca;
+.main__chart-note, .main__chart-warning-note {
+    margin: 0;
+    height: 1.25rem;
     font-size: 0.875rem;
+    line-height: 1.25rem;
+    overflow-y: auto;
+}
+
+.main__chart-note {
+    display: flex;
+    align-items: flex-end;
+    color: #fecaca;
+}
+
+.main__chart-warning-note {
+    margin-bottom: 8px;
+    display: flex;
+    align-items: flex-start;
+    color: #fed7aa;
 }
 
 .main__chart .recharts-text {
     fill: #cbd5e1;
+    font-family: system-ui, sans-serif;
 }
 
 .main__chart .recharts-tooltip-wrapper {
     color: #0f172a;
+}
+
+.main__canvas-wrap {
+    width: 100%;
+    position: relative;
+}
+
+.main__canvas {
+    width: 100%;
+    display: block;
+    cursor: crosshair;
+    touch-action: none;
+}
+
+.main__canvas-empty {
+    margin: 8px 0 0 124px;
+    position: absolute;
+    z-index: 1;
+    color: #cbd5e1;
+}
+
+.main__canvas-selection {
+    height: calc(100% - 84px);
+    position: absolute;
+    top: 8px;
+    border: 1px solid #86efac;
+    background: rgb(134 239 172 / 20%);
+    pointer-events: none;
+}
+
+.main__canvas-tooltip {
+    padding: 8px;
+    min-width: 140px;
+    display: flex;
+    flex-direction: column;
+    position: absolute;
+    z-index: 2;
+    border: 1px solid #94a3b8;
+    border-radius: 6px;
+    background: #0f172a;
+    color: #f8fafc;
+    pointer-events: none;
 }
 
 .main__issues {
@@ -357,6 +444,14 @@
 
     .main__cards {
         grid-template-columns: minmax(0, 1fr);
+    }
+
+    .main__view-mode {
+        min-height: 80px;
+    }
+
+    .main__chart-note, .main__chart-warning-note {
+        height: 3.75rem;
     }
 }
 

@@ -20,3 +20,16 @@ tsc -b && vite build
 Exit code 0; Vite warns that one JavaScript chunk exceeds 500 kB.
 
 Intermediate test failures were observed while changing duplicate issue details and bucket endpoints (1 then 2 failures). Expectations were updated to match the intended behavior; the subsequent full run passed.
+
+Overview / All points implementation, 2026-11-11:
+> npm test -- --run
+RUN  v5.1.0 C:/Projects/Recharts
+Test Files  13 passed (13)
+Tests       38 passed (38)
+Duration    3.63s
+
+> npm run lint
+Exit code 0
+
+> npm run build
+Exit code 0; Vite still warns that one JavaScript chunk exceeds 500 kB.

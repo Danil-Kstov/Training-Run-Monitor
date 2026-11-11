@@ -7,8 +7,20 @@ export type ChartAxis = {
 const niceMultipliers = [1, 2, 2.5, 5, 10];
 
 export function createYAxis(values: number[]): ChartAxis {
-    const finite = values.filter(Number.isFinite);
-    if (finite.length === 0) {
+    let minimum = Infinity;
+    let maximum = -Infinity;
+
+    for (const value of values) {
+        if (!Number.isFinite(value)) continue;
+        if (value < minimum) minimum = value;
+        if (value > maximum) maximum = value;
+    }
+
+    return createYAxisFromBounds(minimum, maximum);
+}
+
+export function createYAxisFromBounds(minimum: number, maximum: number): ChartAxis {
+    if (!Number.isFinite(minimum) || !Number.isFinite(maximum)) {
         return {
             domain: [0, 1],
             ticks: [0, 0.25, 0.5, 0.75, 1],
@@ -16,8 +28,6 @@ export function createYAxis(values: number[]): ChartAxis {
         };
     }
 
-    const minimum = Math.min(...finite);
-    const maximum = Math.max(...finite);
     const nearlyFlat = maximum - minimum <= Math.max(Math.abs(maximum), 1) * 1e-9;
     let lower = minimum;
     let upper = maximum;

@@ -31,7 +31,7 @@ const RunAlerts = ({ view, onInspect }: RunAlertsProps) => {
         pageSize
     );
 
-    if (!view?.data) return null;
+    if (!view?.data && !view?.rawData) return null;
 
     return (
         <>

@@ -29,4 +29,5 @@ export type ChartPoint = {
     loss: number | null;
     lr: number | null;
     grad_norm: number | null;
+    anchor?: boolean;
 };

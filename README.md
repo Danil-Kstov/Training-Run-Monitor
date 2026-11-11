@@ -9,7 +9,7 @@ npm ci
 npm run dev
 ```
 
-Open the URL shown by Vite. Choose a run from the list. Drag across a chart or enter integer step bounds and press **Zoom**. Quick zoom buttons take 1/2, 1/4, or 1/10 of the range currently entered in From step and To step, keeping From step fixed. For example, 500–1000 becomes 500–750 with 1/2. Use **Reset zoom** to restore the full run. The input fields, buttons, and run links are keyboard accessible.
+Open the URL shown by Vite. Choose a run from the list. Drag across a chart or enter integer step bounds and press **Zoom**. Quick zoom buttons take 1/2, 1/4, or 1/10 of the range currently entered in From step and To step, keeping From step fixed. For example, 500–1000 becomes 500–750 with 1/2. Use **Reset zoom** to restore the full run. The input fields, buttons, and run links are keyboard accessible. The **Overview / All points** buttons change detail without changing the selected range; switching runs resets to Overview.
 
 ## Checks
 
@@ -19,9 +19,9 @@ npm run lint
 npm run build
 ```
 
-The worker prepares each selected run once, retains the raw sorted points, and sends only bounded chart series to the UI. Sampling preserves the first, last, minimum, and maximum of each bucket. Invalid values and missing steps break the line; duplicate steps are excluded from connected lines and displayed as amber markers with their raw values in the issue list. Summary cards use unsampled finite values.
+The worker prepares each selected run once and retains the sorted points. An Overview range with at least 100,000 points connects every 1,000th point by global sorted position, plus the visible endpoint and locatable Warning and Data Issue positions. Run-20 therefore has 1,000 anchor points and seven extra positions in each of its three overview charts. Warning spikes are shown as labeled orange markers at their true steps; out-of-scale marker heights are symbolic so the ordinary loss trend remains readable. The Warnings list and Inspect reveal exact values. Smaller ranges include every point automatically. All points mode includes every point in the selected range. Large unabridged ranges use transferable typed arrays and Canvas rather than a million SVG points. Invalid values and genuine missing steps break the line; duplicate steps are excluded from connected lines and displayed as amber markers with their raw values in the issue list. Summary cards use unsampled finite values.
 
-Run-20 has two 1,000-point regions with two and three loss spikes, plus the original spike at step 500,000. The worker identifies dense regions from its cached Warnings, halves the sampling bucket there, and always includes every detected Warning point in the loss series. Issue gaps and markers remain visible. This intentionally departs from the take-home requirement for a million-point run with only one spike.
+Run-20 has two 1,000-point regions with two and three loss spikes, plus the original spike at step 500,000. All six detected Warning points are shown as overview markers. Issue gaps and markers remain visible. This intentionally departs from the take-home requirement for a million-point run with only one spike. The sparse Overview may hide undetected changes or alias fast oscillations; use All points or Inspect before making a stop decision.
 
 Zoom keeps the previous chart and its displayed step range until the worker returns the new series. A small "Updating charts…" status appears only if the request takes more than 200 ms. A failed zoom shows an error while keeping the previous chart; changing runs still shows the full loading state.
 

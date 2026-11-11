@@ -9,13 +9,19 @@ import { formatNumber } from "../../lib/formatNumber";
 import type { StepRange } from "../../lib/runView";
 import type { WorkerResponse } from "./types";
 import type { Metric } from "../../types/types";
+import type { ViewMode } from "../../lib/chartPayload";
+import type { DataIssue } from "../../lib/prepareTrainingPoints";
+import type { DataWarning } from "../../lib/detectLossWarnings";
+
+const emptyIssues: DataIssue[] = [];
+const emptyWarnings: DataWarning[] = [];
 
 type RunDetailsProps = {
     runId: string;
     view: WorkerResponse | null;
     reservedHeight: number | null;
     contentRef: RefObject<HTMLElement | null>;
-    onRequestRange: (range?: StepRange, scrollMetric?: Metric) => void;
+    onRequestRange: (range?: StepRange, scrollMetric?: Metric, mode?: ViewMode) => void;
     scrollTarget: { requestId: number; metric: Metric } | null;
     pendingRangeRequestId: number | null;
     rangeError: string;
@@ -32,7 +38,7 @@ const RunDetails = ({
     rangeError,
 }: RunDetailsProps) => {
     useEffect(() => {
-        if (!view?.data || view.requestId !== scrollTarget?.requestId) return;
+        if ((!view?.data && !view?.rawData) || view.requestId !== scrollTarget?.requestId) return;
 
         const chart = document.getElementById(`metric-chart-${scrollTarget.metric}`);
         chart?.focus({ preventScroll: true });
@@ -42,9 +48,12 @@ const RunDetails = ({
     const selectedRun = trainingRuns.find((run) => run.id === runId);
     const summary = view?.summary;
     const chartData = view?.data;
+    const rawData = view?.rawData;
     const range = view?.range;
     const fullRange = view?.fullRange;
-    const issues = view?.issues ?? [];
+    const issues = view?.issues ?? emptyIssues;
+    const warnings = view?.warnings ?? emptyWarnings;
+    const showChartDetail = (view?.visibleCount ?? 0) >= 100_000;
     const summaryCards = summary ? [
         ["Points", formatNumber(summary.pointCount)],
         ["Data issues", formatNumber(summary.issueCount)],
@@ -91,11 +100,11 @@ const RunDetails = ({
                 </p>
             )}
 
-            {chartData && summary && summary.pointCount === 0 && (
+            {(chartData || rawData) && summary && summary.pointCount === 0 && (
                 <p role="status">No training data available for this run.</p>
             )}
 
-            {chartData && summary && summary.pointCount > 0 && range && fullRange && (
+            {(chartData || rawData) && summary && summary.pointCount > 0 && range && fullRange && (
                 <>
                     <div className="main__cards">
                         {summaryCards.map(([label, value]) => (
@@ -116,9 +125,36 @@ const RunDetails = ({
                         onRequestRange={onRequestRange}
                     />
 
+                    {summary.pointCount >= 100_000 && (
+                        <div
+                            className="main__view-mode"
+                            role={showChartDetail ? "group" : undefined}
+                            aria-label={showChartDetail ? "Chart detail" : undefined}
+                        >
+                            {showChartDetail && (
+                                <>
+                                    <span>Chart detail:</span>
+                                    {(["overview", "all"] as const).map((mode) => (
+                                        <button
+                                            key={mode}
+                                            type="button"
+                                            aria-pressed={(view.mode ?? "overview") === mode}
+                                            onClick={() => onRequestRange(range, undefined, mode)}
+                                        >
+                                            {mode === "overview" ? "Overview" : "All points"}
+                                        </button>
+                                    ))}
+                                </>
+                            )}
+                        </div>
+                    )}
+
                     <p className="main__range">
                         Showing steps {formatNumber(range.start)}–{formatNumber(range.end)}.
-                        Drag across a chart or enter a range to zoom. Values between sampled points are omitted; local extremes are retained.
+                        {" "}Drag across a chart or enter a range to zoom.
+                        {view.sampled && (
+                            <> Overview lines connect every 1,000th source point.</>
+                        )}
                     </p>
                     <div className="main__range-feedback">
                         {pendingRangeRequestId !== null && (
@@ -131,13 +167,27 @@ const RunDetails = ({
                             <MetricChart
                                 key={metric}
                                 metric={metric}
-                                data={chartData[metric]}
+                                data={chartData?.[metric]}
+                                rawData={rawData}
+                                sampled={view.sampled}
                                 range={range}
                                 issues={issues}
+                                warnings={warnings}
                                 onZoom={onRequestRange}
                             />
                         ))}
                     </div>
+
+                    <p className="main__point-count">
+                        Rendering {formatNumber(view.renderedCount ?? 0)} of {formatNumber(view.visibleCount ?? 0)} real points.
+                        {view.sampled
+                            ? " Overview keeps every 1,000th point, warnings and issue markers."
+                            : " Every point in this range is included."}
+                        {" "}Multiple real points can occupy the same pixel.
+                        {view.sampled && (
+                            <> Rapid oscillations or changes missed by the Warning rule may be hidden or aliased. Use All points or Inspect before a stop decision.</>
+                        )}
+                    </p>
                 </>
             )}
 

@@ -1,25 +1,25 @@
 import { trainingRuns } from "../data/trainingRuns";
 import prepareTrainingPoints from "../lib/prepareTrainingPoints";
-import { buildVisibleSeries, createSamplingHints, summarizeRun } from "../lib/runView";
+import { summarizeRun } from "../lib/runView";
+import { buildChartPayload } from "../lib/chartPayload";
+import type { ViewMode } from "../lib/chartPayload";
 import type { StepRange } from "../lib/runView";
 import type { TrainingPoint } from "../types/types";
 import type { DataIssue } from "../lib/prepareTrainingPoints";
 import type { RunSummary } from "../lib/runView";
 import { detectLossWarnings } from "../lib/detectLossWarnings";
 import type { DataWarning } from "../lib/detectLossWarnings";
-import type { SamplingHints } from "../lib/runView";
 
-type Request = { requestId: number; runId: string; range?: StepRange };
+type Request = { requestId: number; runId: string; range?: StepRange; mode?: ViewMode };
 
 let cachedRunId = "";
 let cachedPoints: TrainingPoint[] = [];
 let cachedIssues: DataIssue[] = [];
 let cachedSummary: RunSummary | null = null;
 let cachedWarnings: DataWarning[] = [];
-let cachedSamplingHints: SamplingHints | null = null;
 
 self.onmessage = (event: MessageEvent<Request>) => {
-    const { requestId, runId, range } = event.data;
+    const { requestId, runId, range, mode = "overview" } = event.data;
 
     try {
         if (cachedRunId !== runId) {
@@ -28,17 +28,15 @@ self.onmessage = (event: MessageEvent<Request>) => {
 
             const prepared = prepareTrainingPoints(run.generate());
             const warnings = detectLossWarnings(prepared.points);
-            const hints = createSamplingHints(prepared.points, warnings);
             const summary = summarizeRun(prepared.points, prepared.issues, warnings);
             cachedRunId = runId;
             cachedPoints = prepared.points;
             cachedIssues = prepared.issues;
             cachedWarnings = warnings;
-            cachedSamplingHints = hints;
             cachedSummary = summary;
         }
 
-        if (!cachedSamplingHints || !cachedSummary) throw new Error("Run cache unavailable");
+        if (!cachedSummary) throw new Error("Run cache unavailable");
         const summary = cachedSummary;
         const fullRange = {
             start: summary.firstStep ?? 0,
@@ -46,17 +44,29 @@ self.onmessage = (event: MessageEvent<Request>) => {
         };
         const visibleRange = range ?? fullRange;
 
+        const payload = buildChartPayload(
+            cachedPoints,
+            cachedIssues,
+            cachedWarnings,
+            visibleRange,
+            mode
+        );
+        const transfer = payload.rawData
+            ? Object.values(payload.rawData).map((array) => array.buffer)
+            : [];
+
         self.postMessage({
             requestId,
             runId,
             range: visibleRange,
             fullRange,
             initial: range === undefined,
+            mode,
             summary,
             issues: cachedIssues,
             warnings: cachedWarnings,
-            data: buildVisibleSeries(cachedPoints, cachedIssues, visibleRange, 800, cachedSamplingHints),
-        });
+            ...payload,
+        }, { transfer });
     } catch (error) {
         self.postMessage({
             requestId,
