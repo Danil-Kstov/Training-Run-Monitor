@@ -16,7 +16,7 @@ it('preserves min and max loss in each bucket', () => {
 
     const result = downsample(data, 4, "loss")
 
-    expect(result.map(point => point.loss)).toEqual([90, 2, 66, 1.2]);
+    expect(result.map(point => point.loss)).toEqual([4, 90, 2, 1.5, 66, 1.2]);
 });
 
 it("testing with an incomplete group", () => {
@@ -31,7 +31,7 @@ it("testing with an incomplete group", () => {
 
     const result = downsample(data, 4, "loss")
 
-    expect(result.map(point => point.loss)).toEqual([90, 2, 1.5, 1.4]);
+    expect(result.map(point => point.loss)).toEqual([4, 90, 2, 1.5, 1.4]);
 })
 
 it("testing with a huge bucket", () => {
@@ -44,7 +44,7 @@ it("testing with a huge bucket", () => {
 
     const result = downsample(data, 100, "loss")
 
-    expect(result.map(point => point.loss)).toEqual([90, 2]);
+    expect(result.map(point => point.loss)).toEqual([4, 90, 2]);
 })
 
 it("testing with an incorrect bucket", () => {

@@ -357,8 +357,8 @@ export const trainingRuns: TrainingRun[] = [
                         gradientAmplitude: 0.3,
                         gradientPeriod: 150,
                     }),
-                    [100_000, 500_000, 900_000],
-                    [25, 500, 75]
+                    [250_099, 250_599, 499_999, 750_099, 750_499, 750_899],
+                    [80, 120, 500, 90, 140, 110]
                 ),
                 [
                     { index: 200_000, metric: "loss", value: NaN },

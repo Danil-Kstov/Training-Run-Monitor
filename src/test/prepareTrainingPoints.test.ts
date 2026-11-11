@@ -1,6 +1,6 @@
 import {it, expect} from "vitest";
 import prepareTrainingPoints from "../lib/prepareTrainingPoints";
-import type {TrainingPoint} from "../data/trainingRuns";
+import type {TrainingPoint} from "../types/types";
 
 it("sorts points and preserves duplicate steps", () => {
     const data: TrainingPoint[] = [
@@ -27,6 +27,10 @@ it("sorts points and preserves duplicate steps", () => {
         type: "DUPLICATE_STEP",
         step: 3,
         indices: [0, 2],
+        values: [
+            { loss: 0.7, lr: 0.01, grad_norm: 1.2 },
+            { loss: 0.65, lr: 0.01, grad_norm: 1.1 },
+        ],
     })
 });
 

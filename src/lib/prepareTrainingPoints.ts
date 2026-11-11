@@ -7,6 +7,13 @@ export type DataIssue =
     type: "DUPLICATE_STEP";
     step: number;
     indices: number[];
+    values: Pick<TrainingPoint, "loss" | "lr" | "grad_norm">[];
+}
+    | {
+    type: "UNSORTED_STEP";
+    index: number;
+    step: number;
+    previousStep: number;
 }
     | {
     type: "INVALID_VALUE";
@@ -43,6 +50,17 @@ function prepareTrainingPoints(
     }> = [];
 
     input.forEach((point, index) => {
+        if (index > 0 && Number.isFinite(point.step) &&
+            Number.isFinite(input[index - 1].step) &&
+            point.step < input[index - 1].step) {
+            issues.push({
+                type: "UNSORTED_STEP",
+                index,
+                step: point.step,
+                previousStep: input[index - 1].step,
+            });
+        }
+
         if (!Number.isFinite(point.step)) {
             issues.push({
                 type: "INVALID_STEP",
@@ -65,7 +83,7 @@ function prepareTrainingPoints(
         }
 
         validSteps.push({
-            point: { ...point },
+            point,
             originalIndex: index,
         });
     });
@@ -90,22 +108,28 @@ function prepareTrainingPoints(
         }
     }
 
-    const indicesByStep = new Map<number, number[]>();
+    for (let i = 0; i < validSteps.length;) {
+        let end = i + 1;
 
-    for (const { point, originalIndex } of validSteps) {
-        const indices = indicesByStep.get(point.step) ?? [];
-        indices.push(originalIndex);
-        indicesByStep.set(point.step, indices);
-    }
+        while (end < validSteps.length &&
+            validSteps[end].point.step === validSteps[i].point.step) {
+            end++;
+        }
 
-    for (const [step, indices] of indicesByStep) {
-        if (indices.length > 1) {
+        if (end - i > 1) {
             issues.push({
                 type: "DUPLICATE_STEP",
-                step,
-                indices,
+                step: validSteps[i].point.step,
+                indices: validSteps.slice(i, end).map(({ originalIndex }) => originalIndex),
+                values: validSteps.slice(i, end).map(({ point }) => ({
+                    loss: point.loss,
+                    lr: point.lr,
+                    grad_norm: point.grad_norm,
+                })),
             });
         }
+
+        i = end;
     }
 
     return {

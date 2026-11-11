@@ -4,7 +4,10 @@ import downsample from "./downsample";
 export function downsampleForChart(
     points: TrainingPoint[],
     bucketSize: number,
-    metric: Metric
+    metric: Metric,
+    duplicateSteps: ReadonlySet<number> = new Set(),
+    requiredSteps: ReadonlySet<number> = new Set(),
+    refinedWindows: ReadonlyArray<{ start: number; end: number }> = []
 ): ChartPoint[] {
     const result: ChartPoint[] = [];
     let segment: TrainingPoint[] = [];
@@ -14,13 +17,22 @@ export function downsampleForChart(
         if (segment.length === 0) return;
 
         result.push(
-            ...downsample(segment, bucketSize, metric)
+            ...downsample(segment, bucketSize, metric, requiredSteps, refinedWindows)
         );
 
         segment = [];
     };
 
     for (const point of points) {
+        if (duplicateSteps.has(point.step)) {
+            flush();
+            if (previous?.step !== point.step) {
+                result.push({ ...point, [metric]: null });
+            }
+            previous = point;
+            continue;
+        }
+
         const valid = Number.isFinite(point[metric]);
 
         const missingSteps =

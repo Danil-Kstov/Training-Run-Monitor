@@ -1,0 +1,23 @@
+{
+  "points": {
+    "loss": 1615,
+    "lr": 1600,
+    "grad_norm": 3197
+  },
+  "warnings": 6,
+  "denseWindows": [
+    {
+      "start": 250001,
+      "end": 251000
+    },
+    {
+      "start": 750001,
+      "end": 751000
+    }
+  ],
+  "samplesMs": [
+    245.25,
+    227.2,
+    228.05
+  ]
+}

@@ -1,177 +1,138 @@
-import MetricChart from "../MetricChart/MetricChart.tsx";
-import { trainingRuns } from "../../data/trainingRuns.ts";
 import { useEffect, useRef, useState } from "react";
-import type { ChartPoint, Metric } from "../../types/types";
-import type { DataIssue } from "../../lib/prepareTrainingPoints";
+import RunDetails from "./RunDetails";
+import RunSidebar from "./RunSidebar";
+import type { WorkerResponse } from "./types";
+import type { StepRange } from "../../lib/runView";
+import type { Metric } from "../../types/types";
+import "./Main.css";
 
-type WorkerResponse = {
-    requestId: number;
-    runId: string;
-    data?: Record<Metric, ChartPoint[]>;
-    issues?: DataIssue[];
-    error?: string;
-};
+const runIdFromPath = () => window.location.pathname.match(/^\/runs\/(Run-\d+)\/?$/)?.[1] ?? "Run-01";
+
+type ScrollTarget = { requestId: number; metric: Metric };
 
 const Main = () => {
-    const [selectedRunId, setSelectedRunId] = useState<string>("Run-01");
-    const [filter, setFilter] = useState<string>("all");
-    const [sortBy, setSortBy] = useState<string>("id");
-    const latestRequestId = useRef(0);
+    const [selectedRunId, setSelectedRunId] = useState(runIdFromPath);
+    const [view, setView] = useState<WorkerResponse | null>(null);
+    const [reservedHeight, setReservedHeight] = useState<number | null>(null);
+    const [scrollTarget, setScrollTarget] = useState<ScrollTarget | null>(null);
+    const [pendingRangeRequestId, setPendingRangeRequestId] = useState<number | null>(null);
+    const [rangeError, setRangeError] = useState("");
+    const requestSequence = useRef(1);
+    const pendingRangeRequestRef = useRef<number | null>(null);
+    const workerRef = useRef<Worker | null>(null);
+    const contentRef = useRef<HTMLElement>(null);
 
-    const [chartData, setChartData] = useState<
-        Record<Metric, ChartPoint[]> | null
-    >(null);
+    const currentView = view?.runId === selectedRunId ? view : null;
 
-    const [issues, setIssues] = useState<DataIssue[]>([]);
-    const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-
-    const filteredRuns = trainingRuns.filter((run) => {
-        if (filter === "all") return true;
-
-        return run.tags.includes(filter);
-    });
-
-    const sortedRuns = [...filteredRuns].sort((a, b) => {
-        if (sortBy === "name") {
-            return a.name.localeCompare(b.name);
+    const rememberHeight = () => {
+        if (currentView?.data && contentRef.current) {
+            setReservedHeight(contentRef.current.getBoundingClientRect().height);
         }
+    };
 
-        if (sortBy === "count") {
-            return a.pointCount - b.pointCount;
-        }
-
-        return a.id.localeCompare(b.id);
-    });
-
-    const visibleSelectedRunId = sortedRuns.some(
-        (run) => run.id === selectedRunId
-    )
-        ? selectedRunId
-        : (sortedRuns[0]?.id ?? "");
+    const navigate = (runId: string, push = true) => {
+        if (runId === selectedRunId) return;
+        rememberHeight();
+        requestSequence.current++;
+        pendingRangeRequestRef.current = null;
+        setPendingRangeRequestId(null);
+        setRangeError("");
+        setView(null);
+        setSelectedRunId(runId);
+        setScrollTarget(null);
+        if (push) window.history.pushState(null, "", `/runs/${runId}`);
+    };
 
     useEffect(() => {
-        const requestId = ++latestRequestId.current;
-
-        setChartData(null);
-        setIssues([]);
-        setError(null);
-
-        if (!visibleSelectedRunId) {
-            setIsLoading(false);
-            return;
+        if (window.location.pathname === "/") {
+            window.history.replaceState(null, "", `/runs/${selectedRunId}`);
         }
 
-        setIsLoading(true);
+        const onPopState = () => navigate(runIdFromPath(), false);
+        window.addEventListener("popstate", onPopState);
+        return () => window.removeEventListener("popstate", onPopState);
+    });
 
+    useEffect(() => {
         const worker = new Worker(
             new URL("../../workers/training.worker.ts", import.meta.url),
             { type: "module" }
         );
+        workerRef.current = worker;
 
-        worker.onmessage = (
-            event: MessageEvent<WorkerResponse>
-        ) => {
+        worker.onmessage = (event: MessageEvent<WorkerResponse>) => {
             const response = event.data;
+            if (response.requestId !== requestSequence.current) return;
 
-            if (response.requestId !== latestRequestId.current) {
-                return;
+            if (pendingRangeRequestRef.current === response.requestId) {
+                pendingRangeRequestRef.current = null;
+                setPendingRangeRequestId(null);
+                if (response.error) setRangeError(response.error);
+                else setView(response);
+            } else {
+                setView(response);
             }
-
-            setIsLoading(false);
-
-            if (response.error || !response.data) {
-                setError(response.error ?? "Invalid worker response");
-                return;
-            }
-
-            setChartData(response.data);
-            setIssues(response.issues ?? []);
+            setReservedHeight(null);
         };
 
         worker.onerror = () => {
-            if (requestId !== latestRequestId.current) return;
-
-            setIsLoading(false);
-            setError("Worker failed");
+            if (pendingRangeRequestRef.current !== null) {
+                pendingRangeRequestRef.current = null;
+                setPendingRangeRequestId(null);
+                setRangeError("Worker failed");
+            } else {
+                setView({
+                    requestId: requestSequence.current,
+                    runId: selectedRunId,
+                    error: "Worker failed",
+                });
+            }
         };
 
-        worker.postMessage({
-            requestId,
-            runId: visibleSelectedRunId,
-        });
+        worker.postMessage({ requestId: requestSequence.current, runId: selectedRunId });
 
         return () => {
             worker.terminate();
-            latestRequestId.current++;
+            if (workerRef.current === worker) workerRef.current = null;
         };
-    }, [visibleSelectedRunId]);
+    }, [selectedRunId]);
+
+    const requestRange = (range?: StepRange, scrollMetric?: Metric) => {
+        if (!workerRef.current) return;
+        requestSequence.current++;
+        pendingRangeRequestRef.current = requestSequence.current;
+        setPendingRangeRequestId(requestSequence.current);
+        setRangeError("");
+        setScrollTarget(scrollMetric
+            ? { requestId: requestSequence.current, metric: scrollMetric }
+            : null);
+        workerRef.current.postMessage({
+            requestId: requestSequence.current,
+            runId: selectedRunId,
+            range,
+        });
+    };
 
     return (
-        <main className="p-6 flex-1 flex flex-col gap-10  justify-center items-center">
-            <div className="w-full flex justify-center sm:gap-10 gap-4 items-center">
-                <select
-                    className="pl-2 sm:w-[240px] w-[155px] sm:text-base text-sm h-10 text-gray-300
-                    bg-gray-700 rounded-md border-2 border-gray-500 focus:outline-none focus:ring-2 focus:ring-green-600"
-                    value={filter}
-                    onChange={(e) => setFilter(e.target.value)}
-                >
-                    <option value="all">All runs</option>
-                    <option value="normal">Normal runs</option>
-                    <option value="invalid">With NaN, Infinity</option>
-                    <option value="missing">With missed steps</option>
-                    <option value="unsorted">With unsorted steps</option>
-                    <option value="duplicate">With duplicated steps</option>
-                    <option value="spikes">With loss spikes</option>
-                </select>
+        <main className="main">
+            <RunSidebar
+                selectedRunId={selectedRunId}
+                onSelectRun={navigate}
+            />
 
-                <select
-                    className="pl-2 sm:w-[240px] w-[155px] sm:text-base text-sm h-10 text-gray-300
-                    bg-gray-700 rounded-md border-2 border-gray-500 focus:outline-none focus:ring-2 focus:ring-green-600"
-                    value={sortBy}
-                    onChange={(e) => setSortBy(e.target.value)}
-                >
-                    <option value="id">Sort by ID</option>
-                    <option value="name">Sort by name</option>
-                    <option value="count">Sort by point count</option>
-                </select>
-            </div>
-
-            <select
-                className="pl-2 sm:w-[520px] w-[326px] h-10 text-gray-300 bg-gray-700 rounded-md border-2 border-gray-500 focus:outline-none focus:ring-2 focus:ring-green-600"
-                value={visibleSelectedRunId}
-                onChange={(e) => setSelectedRunId(e.target.value)}
-            >
-                {sortedRuns.map((run) => (
-                    <option key={run.id} value={run.id}>
-                        ({run.id}) {run.name}
-                    </option>
-                ))}
-            </select>
-
-            <section className="w-full max-w-[800px] flex flex-col justify-center gap-6">
-                {error && <p role="alert">{error}</p>}
-
-                {isLoading && (
-                    <p role="status">Processing training data...</p>
-                )}
-
-                {!isLoading && chartData && (
-                    chartData.loss.length === 0 ? (
-                        <p role="status">No training data available</p>
-                    ) : (
-                        <>
-                            <p>Detected issues: {issues.length}</p>
-
-                            <MetricChart metric="loss" data={chartData.loss} />
-                            <MetricChart metric="lr" data={chartData.lr} />
-                            <MetricChart metric="grad_norm" data={chartData.grad_norm} />
-                        </>
-                    )
-                )}
-            </section>
+            <RunDetails
+                key={selectedRunId}
+                runId={selectedRunId}
+                view={currentView}
+                reservedHeight={reservedHeight}
+                contentRef={contentRef}
+                onRequestRange={requestRange}
+                scrollTarget={scrollTarget}
+                pendingRangeRequestId={pendingRangeRequestId}
+                rangeError={rangeError}
+            />
         </main>
-    )
-}
+    );
+};
 
 export default Main;

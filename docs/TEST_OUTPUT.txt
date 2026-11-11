@@ -1,0 +1,22 @@
+Baseline, before this implementation:
+> npm test -- --run
+Test Files  2 passed (2)
+Tests       7 passed (7)
+Duration    636ms
+
+Current implementation, 2026-11-11:
+> npm test -- --run
+RUN  v5.1.0 C:/Projects/Recharts
+Test Files  10 passed (10)
+Tests       32 passed (32)
+Duration    2.89s
+
+> npm run lint
+eslint .
+Exit code 0
+
+> npm run build
+tsc -b && vite build
+Exit code 0; Vite warns that one JavaScript chunk exceeds 500 kB.
+
+Intermediate test failures were observed while changing duplicate issue details and bucket endpoints (1 then 2 failures). Expectations were updated to match the intended behavior; the subsequent full run passed.

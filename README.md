@@ -1,78 +1,38 @@
-# React + TypeScript + Vite
+# Training Run Monitor
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React, TypeScript, Vite, Recharts, and a Web Worker. The app generates 20 deterministic training runs and exposes `/runs/:id` pages with loss, learning-rate, and gradient-norm charts.
 
-Currently, two official plugins are available:
+## Run locally
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is enabled on this template. See [this documentation](https://react.dev/learn/react-compiler) for more information.
-
-Note: This will impact Vite dev & build performances.
-You can also try [the experimental native React Compiler support in plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md#rust-react-compiler) by using `compiler: true` in the plugin options instead of using the Babel plugin.
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.layout.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
+```sh
+npm ci
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://npmx.dev/package/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://npmx.dev/package/eslint-plugin-react-dom) for React-specific lint rules:
+Open the URL shown by Vite. Choose a run from the list. Drag across a chart or enter integer step bounds and press **Zoom**. Quick zoom buttons take 1/2, 1/4, or 1/10 of the range currently entered in From step and To step, keeping From step fixed. For example, 500–1000 becomes 500–750 with 1/2. Use **Reset zoom** to restore the full run. The input fields, buttons, and run links are keyboard accessible.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Checks
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.layout.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
+```sh
+npm test -- --run
+npm run lint
+npm run build
 ```
+
+The worker prepares each selected run once, retains the raw sorted points, and sends only bounded chart series to the UI. Sampling preserves the first, last, minimum, and maximum of each bucket. Invalid values and missing steps break the line; duplicate steps are excluded from connected lines and displayed as amber markers with their raw values in the issue list. Summary cards use unsampled finite values.
+
+Run-20 has two 1,000-point regions with two and three loss spikes, plus the original spike at step 500,000. The worker identifies dense regions from its cached Warnings, halves the sampling bucket there, and always includes every detected Warning point in the loss series. Issue gaps and markers remain visible. This intentionally departs from the take-home requirement for a million-point run with only one spike.
+
+Zoom keeps the previous chart and its displayed step range until the worker returns the new series. A small "Updating charts…" status appears only if the request takes more than 200 ms. A failed zoom shows an error while keeping the previous chart; changing runs still shows the full loading state.
+
+Red dots mark the step of a NaN or Infinity value on its affected metric chart. Their vertical placement is symbolic because the invalid value has no finite y-coordinate; the text label and Data issues list provide its actual type. The line remains broken at that step.
+
+Loss spikes appear in a separate **Warnings** section, calculated from the full prepared run before chart sampling. The current rule flags an isolated positive loss value that is at least three times both adjacent values and at least one unit above them. Warnings are inspection cues, not invalid data or an automatic stop decision; adjacent spikes and sustained divergence may need other detection rules.
+
+Each Data issue with a numeric step has an **Inspect** button that opens its chart range and scrolls to the affected metric chart after loading. Missing-step ranges and both steps involved in an ordering issue are included; step-wide issues use the loss chart. An invalid step has no chart position and is identified as such in the list. Warning inspection scrolls to loss.
+
+The [submission note](docs/SUBMISSION.md) records test evidence, known gaps, and the current verdict. [Test output](docs/TEST_OUTPUT.txt) is saved separately. [Performance capture instructions](docs/PERFORMANCE.md) describe the still-needed browser trace and memory measurement.
+
+## Deploy
+
+The repository includes `vercel.json` for direct `/runs/:id` links. Once authenticated with Vercel, run `vercel --prod` from the repository root. Verify a direct link such as `/runs/Run-20` after deployment.
